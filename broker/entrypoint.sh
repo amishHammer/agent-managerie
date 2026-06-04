@@ -28,16 +28,19 @@ user ${MQTT_HOOK_USERNAME}
 topic write ${MQTT_TOPIC_ROOT}/events/#
 topic write ${MQTT_TOPIC_ROOT}/state/#
 topic write ${MQTT_TOPIC_ROOT}/health/#
+topic write ${MQTT_TOPIC_ROOT}/profile/#
 
 user ${MQTT_APP_USERNAME}
 topic read ${MQTT_TOPIC_ROOT}/events/#
-topic read ${MQTT_TOPIC_ROOT}/state/#
-topic read ${MQTT_TOPIC_ROOT}/health/#
+topic readwrite ${MQTT_TOPIC_ROOT}/state/#
+topic readwrite ${MQTT_TOPIC_ROOT}/health/#
+topic readwrite ${MQTT_TOPIC_ROOT}/profile/#
 
 user ${MQTT_COLLECTOR_USERNAME}
 topic read ${MQTT_TOPIC_ROOT}/events/#
 topic read ${MQTT_TOPIC_ROOT}/state/#
 topic read ${MQTT_TOPIC_ROOT}/health/#
+topic read ${MQTT_TOPIC_ROOT}/profile/#
 EOF
 
 chmod 0640 "${PASSWORD_FILE}" "${ACL_FILE}"

@@ -18,6 +18,7 @@ TOPIC_ROOT = os.environ.get("MENAGERIE_TOPIC_ROOT", "menagerie/v1").strip("/")
 EVENT_TOPIC_PREFIX = f"{TOPIC_ROOT}/events"
 STATE_TOPIC_PREFIX = f"{TOPIC_ROOT}/state"
 HEALTH_TOPIC_PREFIX = f"{TOPIC_ROOT}/health"
+PROFILE_TOPIC_PREFIX = f"{TOPIC_ROOT}/profile"
 DEFAULT_IDLE_AFTER_SECONDS = 120
 DEFAULT_DEAD_AFTER_SECONDS = 900
 DEFAULT_EXITED_AFTER_SECONDS = 3600
@@ -268,6 +269,7 @@ def session_id_from(raw: dict[str, Any], *, fallback: str) -> str:
         or raw.get("thread_id")
         or raw.get("threadId")
         or env_value("MENAGERIE_SESSION_ID", "CODEX_PET_SESSION_ID")
+        or os.environ.get("CODEX_THREAD_ID")
         or fallback
     )
     return topic_segment(value, "unknown")
@@ -623,6 +625,31 @@ def session_health_document(event: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def session_profile_document(
+    *,
+    workspace_id: str,
+    session_id: str,
+    display_name: str | None,
+    source: str = "menagerie-tool",
+) -> dict[str, Any]:
+    if display_name is None:
+        sanitized_name = None
+    else:
+        sanitized_name = redact_text(display_name.strip(), limit=80) or None
+    summary = "Session name cleared" if sanitized_name is None else f"Session named {sanitized_name}"
+    return {
+        "id": str(uuid.uuid4()),
+        "ts": now_iso(),
+        "source": source,
+        "schema": "menagerie.sessionProfile.v1",
+        "kind": "menagerie.sessionProfile",
+        "workspaceId": topic_segment(workspace_id, "workspace"),
+        "sessionId": topic_segment(session_id, "unknown"),
+        "displayName": sanitized_name,
+        "summary": summary,
+    }
+
+
 def topics_for(event: dict[str, Any]) -> tuple[str, str]:
     workspace = topic_segment(event.get("workspaceId"), "workspace")
     session = topic_segment(event.get("sessionId"), "unknown")
@@ -640,6 +667,12 @@ def session_health_topic(event: dict[str, Any]) -> str:
     workspace = topic_segment(event.get("workspaceId"), "workspace")
     session = topic_segment(event.get("sessionId"), "unknown")
     return f"{HEALTH_TOPIC_PREFIX}/session/{workspace}/{session}"
+
+
+def session_profile_topic(workspace_id: str, session_id: str) -> str:
+    workspace = topic_segment(workspace_id, "workspace")
+    session = topic_segment(session_id, "unknown")
+    return f"{PROFILE_TOPIC_PREFIX}/session/{workspace}/{session}"
 
 
 def dumps(value: dict[str, Any]) -> str:

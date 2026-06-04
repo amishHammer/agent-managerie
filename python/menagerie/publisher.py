@@ -15,6 +15,7 @@ from .events import (
     health_topic,
     session_health_document,
     session_health_topic,
+    session_profile_topic,
     state_document,
     topics_for,
 )
@@ -94,6 +95,27 @@ def publish_event(event: dict) -> None:
                 qos=1,
                 retain=True,
             )
+        client.publish(
+            health_topic(settings.client_id),
+            dumps(health_document(settings.client_id)),
+            qos=1,
+            retain=True,
+        )
+    finally:
+        client.disconnect()
+
+
+def publish_session_profile(profile: dict) -> None:
+    settings = mqtt_settings()
+    client = client_from_settings(settings)
+    client.connect()
+    try:
+        client.publish(
+            session_profile_topic(profile["workspaceId"], profile["sessionId"]),
+            dumps(profile),
+            qos=1,
+            retain=True,
+        )
         client.publish(
             health_topic(settings.client_id),
             dumps(health_document(settings.client_id)),

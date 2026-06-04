@@ -6,8 +6,11 @@ from datetime import datetime
 from menagerie.events import (
     normalize_hook_event,
     normalize_jsonl_event,
+    session_id_from,
     session_health_document,
     session_health_topic,
+    session_profile_document,
+    session_profile_topic,
     state_document,
     topics_for,
 )
@@ -25,6 +28,7 @@ class EventNormalizationTests(unittest.TestCase):
         os.environ.pop("MENAGERIE_IDLE_AFTER_SECONDS", None)
         os.environ.pop("MENAGERIE_DEAD_AFTER_SECONDS", None)
         os.environ.pop("MENAGERIE_EXITED_AFTER_SECONDS", None)
+        os.environ.pop("CODEX_THREAD_ID", None)
         os.environ["MENAGERIE_WORKSPACE_ID"] = "demo-workspace"
 
     def tearDown(self):
@@ -147,6 +151,36 @@ class EventNormalizationTests(unittest.TestCase):
         self.assertEqual(health["sessionState"], "thinking")
         self.assertEqual(health["lifecycle"]["status"], "active")
         self.assertNotIn("state", health)
+
+    def test_session_profile_document_names_session(self):
+        profile = session_profile_document(
+            workspace_id="demo workspace",
+            session_id="session 5",
+            display_name="Bug Hunt",
+        )
+        self.assertEqual(profile["schema"], "menagerie.sessionProfile.v1")
+        self.assertEqual(profile["kind"], "menagerie.sessionProfile")
+        self.assertEqual(profile["workspaceId"], "demo-workspace")
+        self.assertEqual(profile["sessionId"], "session-5")
+        self.assertEqual(profile["displayName"], "Bug Hunt")
+        self.assertEqual(profile["summary"], "Session named Bug Hunt")
+        self.assertEqual(
+            session_profile_topic(profile["workspaceId"], profile["sessionId"]),
+            "menagerie/v1/profile/session/demo-workspace/session-5",
+        )
+
+    def test_session_profile_document_can_clear_name(self):
+        profile = session_profile_document(
+            workspace_id="demo-workspace",
+            session_id="session-6",
+            display_name=None,
+        )
+        self.assertIsNone(profile["displayName"])
+        self.assertEqual(profile["summary"], "Session name cleared")
+
+    def test_session_id_can_fall_back_to_codex_thread_id(self):
+        os.environ["CODEX_THREAD_ID"] = "thread-abc"
+        self.assertEqual(session_id_from({}, fallback="fallback"), "thread-abc")
 
     def test_topics_are_versioned(self):
         event = normalize_hook_event(

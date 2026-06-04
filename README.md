@@ -9,7 +9,7 @@ Menagerie is a Codex activity companion prototype. Each Codex session is tracked
 - `codex exec --json` adapter for non-interactive runs.
 - Native SwiftUI macOS app with a transparent floating gremlin overlay.
 
-The broker is intentionally standard MQTT. Hooks publish redacted session event envelopes, the app subscribes as a read-only client, and the collector sidecar stores recent history in SQLite.
+The broker is intentionally standard MQTT. Hooks publish redacted session event envelopes, the app subscribes as a limited client, and the collector sidecar stores recent history in SQLite.
 
 ## Run The Broker
 
@@ -17,6 +17,12 @@ For local development:
 
 ```sh
 docker compose up --build
+```
+
+After changing broker ACLs or the Mosquitto entrypoint, rebuild and recreate the containers. A plain `docker compose restart` reuses the old image:
+
+```sh
+docker compose up --build -d mqtt collector
 ```
 
 This starts:
@@ -127,6 +133,58 @@ Menagerie does not rely on a Codex session-end hook. Instead, retained session s
 - `MENAGERIE_DEAD_AFTER_SECONDS`, default `900`
 - `MENAGERIE_EXITED_AFTER_SECONDS`, default `3600`
 
+## Friendly Session Names
+
+### Install The Skill
+
+The recommended path is to install the bundled Codex plugin; the skill is installed with it because the plugin manifest declares `skills: "./skills/"`.
+
+From this checkout:
+
+```sh
+codex plugin marketplace add /absolute/path/to/menagerie
+codex plugin add codex-menagerie-events --marketplace menagerie-local
+```
+
+Restart Codex after installing the plugin. The skill is then available as:
+
+```text
+$menagerie-session-name Menagerie-dev
+```
+
+For a skill-only personal install, put the deterministic CLI on `PATH` and link the skill into your Codex skills directory:
+
+```sh
+mkdir -p ~/.local/bin ~/.codex/skills
+ln -sfn /absolute/path/to/menagerie/bin/codex-menagerie-name ~/.local/bin/codex-menagerie-name
+ln -sfn /absolute/path/to/menagerie/plugins/codex-menagerie-events/skills/menagerie-session-name ~/.codex/skills/menagerie-session-name
+```
+
+Restart Codex after linking the skill. Use the full plugin install when you also want lifecycle hooks.
+
+Publish a retained friendly name for the current Codex session with the deterministic CLI:
+
+```sh
+./bin/codex-menagerie-name "Bug Hunt"
+```
+
+In Codex, invoke the bundled skill for the same operation:
+
+```text
+$menagerie-session-name Menagerie-dev
+```
+
+When run from inside Codex, the command uses `CODEX_THREAD_ID` as the session id. Outside Codex, pass the target explicitly:
+
+```sh
+./bin/codex-menagerie-name --workspace-id demo --session-id demo-session "Bug Hunt"
+./bin/codex-menagerie-name --workspace-id demo --session-id demo-session --clear
+```
+
+The command writes `menagerie.sessionProfile.v1` to `menagerie/v1/profile/session/{workspaceId}/{sessionId}` with MQTT retain enabled. The broker user configured in `MENAGERIE_MQTT_USERNAME` needs write access to `profile/#`; the Compose `codex-hook` and `menagerie-app` users have that access.
+
+Menagerie does not parse arbitrary prompt text to set names. Use the CLI or the explicit Codex skill invocation so naming is intentional.
+
 ## Non-Interactive Adapter
 
 Pipe `codex exec --json` into the JSONL adapter:
@@ -145,7 +203,7 @@ Open the package in Xcode on macOS:
 open macos/Menagerie/Package.swift
 ```
 
-The app is a menu-bar SwiftUI app with a transparent floating gremlin panel. Configure it with the read-only app credentials:
+The app is a menu-bar SwiftUI app with a transparent floating gremlin panel. Configure it with the app credentials:
 
 - host: your broker host
 - port: `1883` for dev or `8883` for TLS deployments
@@ -155,9 +213,11 @@ The app is a menu-bar SwiftUI app with a transparent floating gremlin panel. Con
 
 Passwords are stored in the macOS keychain.
 
+The Compose `menagerie-app` user can read `events/#`, and can read/write `state/#`, `health/#`, and `profile/#`. The state and health writes let the macOS app publish retained deletes for stale UI-owned state and heartbeat records. It cannot publish Codex lifecycle events.
+
 ## Collector API
 
-The collector subscribes to `menagerie/v1/events/#`, `state/#`, and `health/#`.
+The collector subscribes to `menagerie/v1/events/#`, `state/#`, `health/#`, and `profile/#`.
 
 ```sh
 curl http://localhost:18080/health

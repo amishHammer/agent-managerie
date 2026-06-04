@@ -10,8 +10,9 @@ Menagerie uses MQTT 3.1.1 for v1.
 - `menagerie/v1/state/{workspaceId}/{sessionId}`: retained current session state.
 - `menagerie/v1/health/{clientId}`: retained client heartbeat.
 - `menagerie/v1/health/session/{workspaceId}/{sessionId}`: retained per-session heartbeat and timeout metadata.
+- `menagerie/v1/profile/session/{workspaceId}/{sessionId}`: retained friendly session profile.
 
-Publishers use QoS 1. State and health messages are retained; event messages are not retained.
+Publishers use QoS 1. State, health, and profile messages are retained; event messages are not retained. A retained publish with a zero-length payload is a delete/tombstone for that retained document and is not a JSON envelope.
 
 ## Formal Model
 
@@ -91,6 +92,26 @@ Fields:
 
 Retained state messages include `lastStreamItem`, copied from the latest event for that session.
 
+## Session Profiles
+
+Friendly session names are stored as retained profile documents on `menagerie/v1/profile/session/{workspaceId}/{sessionId}`. Apps should subscribe to `menagerie/v1/profile/session/{workspaceId}/#` and merge the latest profile into the matching session state by `workspaceId` and `sessionId`.
+
+```json
+{
+  "id": "uuid",
+  "ts": "2026-06-04T02:00:00.000Z",
+  "source": "menagerie-session-name",
+  "schema": "menagerie.sessionProfile.v1",
+  "kind": "menagerie.sessionProfile",
+  "workspaceId": "my-workspace",
+  "sessionId": "session-id",
+  "displayName": "Bug Hunt",
+  "summary": "Session named Bug Hunt"
+}
+```
+
+To clear a friendly name, publish the same document shape with `displayName` set to `null`. The document remains retained so clients can distinguish an explicitly cleared name from no profile message yet.
+
 ## Session Lifecycle
 
 Hook events and retained state messages include `lifecycle`, which lets clients infer state when no new hook arrives. Codex does not currently provide a first-class session-end hook, so `dead` and `exited` are timeout-based display states.
@@ -148,9 +169,9 @@ The publisher also emits retained session heartbeat documents to `menagerie/v1/h
 
 The Compose broker creates three users:
 
-- `codex-hook`: write-only access to `events/#`, `state/#`, and `health/#`.
-- `menagerie-app`: read-only access to `events/#`, `state/#`, and `health/#`.
-- `codex-collector`: read-only access to `events/#`, `state/#`, and `health/#`.
+- `codex-hook`: write-only access to `events/#`, `state/#`, `health/#`, and `profile/#`.
+- `menagerie-app`: read access to `events/#`; read/write access to `state/#`, `health/#`, and `profile/#`.
+- `codex-collector`: read-only access to `events/#`, `state/#`, `health/#`, and `profile/#`.
 
 For production, expose MQTT over TLS and replace every default password.
 

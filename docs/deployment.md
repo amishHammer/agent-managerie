@@ -23,6 +23,6 @@ The repository includes `broker/tls-listener.conf.example` as the Mosquitto list
 
 ## Scaling
 
-MQTT retained state is the source of truth for current session state. The collector is optional for live delivery and can be restarted without interrupting desktop gremlin updates.
+MQTT retained state and profile messages are the source of truth for current session state and friendly names. The collector is optional for live delivery and can be restarted without interrupting desktop gremlin updates.
 
-If many workspaces publish to the same broker, use distinct `MENAGERIE_WORKSPACE_ID` values and per-team ACLs that narrow clients to `menagerie/v1/*/{workspaceId}/#`.
+If many workspaces publish to the same broker, use distinct `MENAGERIE_WORKSPACE_ID` values and per-team ACLs that narrow clients to the relevant workspace-specific topics, such as `menagerie/v1/events/{workspaceId}/#`, `menagerie/v1/state/{workspaceId}/#`, `menagerie/v1/health/session/{workspaceId}/#`, and `menagerie/v1/profile/session/{workspaceId}/#`.

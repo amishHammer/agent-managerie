@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
-from .events import EVENT_TOPIC_PREFIX, HEALTH_TOPIC_PREFIX, STATE_TOPIC_PREFIX, dumps
+from .events import EVENT_TOPIC_PREFIX, HEALTH_TOPIC_PREFIX, PROFILE_TOPIC_PREFIX, STATE_TOPIC_PREFIX, dumps
 from .mqtt import PublishMessage
 from .publisher import client_from_settings, mqtt_settings
 
@@ -110,6 +110,17 @@ class EventStore:
                     ),
                 )
 
+    def delete_retained(self, topic: str) -> None:
+        state_target = _topic_workspace_session(topic, STATE_TOPIC_PREFIX)
+        if not state_target:
+            return
+        workspace_id, session_id = state_target
+        with self._lock, self._conn:
+            self._conn.execute(
+                "DELETE FROM current_state WHERE workspace_id = ? AND session_id = ?",
+                (workspace_id, session_id),
+            )
+
     def recent(self, *, limit: int, workspace_id: str | None, session_id: str | None) -> list[dict[str, Any]]:
         query = "SELECT payload_json FROM events"
         clauses = []
@@ -198,6 +209,7 @@ def run_mqtt(store: EventStore) -> None:
         (f"{EVENT_TOPIC_PREFIX}/#", 1),
         (f"{STATE_TOPIC_PREFIX}/#", 1),
         (f"{HEALTH_TOPIC_PREFIX}/#", 1),
+        (f"{PROFILE_TOPIC_PREFIX}/#", 1),
     ]
     while True:
         try:
@@ -208,18 +220,35 @@ def run_mqtt(store: EventStore) -> None:
             print(f"collector subscribed to MQTT at {settings.host}:{settings.port}", flush=True)
 
             def on_message(message: PublishMessage) -> None:
-                try:
-                    event = json.loads(message.payload.decode("utf-8"))
-                except Exception as exc:
-                    print(f"collector ignored invalid payload on {message.topic}: {exc}", flush=True)
-                    return
-                if isinstance(event, dict):
-                    store.add(message.topic, event)
+                handle_message(store, message)
 
             client.loop_forever(on_message)
         except Exception as exc:
             print(f"collector MQTT connection failed: {exc}; retrying", flush=True)
             time.sleep(5)
+
+
+def handle_message(store: EventStore, message: PublishMessage) -> None:
+    if not message.payload:
+        store.delete_retained(message.topic)
+        return
+    try:
+        event = json.loads(message.payload.decode("utf-8"))
+    except Exception as exc:
+        print(f"collector ignored invalid payload on {message.topic}: {exc}", flush=True)
+        return
+    if isinstance(event, dict):
+        store.add(message.topic, event)
+
+
+def _topic_workspace_session(topic: str, prefix: str) -> tuple[str, str] | None:
+    normalized_prefix = prefix.strip("/")
+    if not topic.startswith(f"{normalized_prefix}/"):
+        return None
+    tail = topic[len(normalized_prefix) + 1 :].split("/")
+    if len(tail) < 2:
+        return None
+    return tail[0], tail[1]
 
 
 def main() -> int:
