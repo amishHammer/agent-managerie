@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+
 # Copy this into a mounted Mosquitto config include and expose port 8883 when
 # deploying outside a trusted development network.
 #
@@ -8,4 +10,3 @@
 # cafile /mosquitto/certs/ca.crt
 # certfile /mosquitto/certs/server.crt
 # keyfile /mosquitto/certs/server.key
-

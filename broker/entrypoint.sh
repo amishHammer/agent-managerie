@@ -1,4 +1,5 @@
 #!/usr/bin/env sh
+# SPDX-License-Identifier: AGPL-3.0-only
 set -eu
 
 : "${MQTT_HOOK_USERNAME:=codex-hook}"

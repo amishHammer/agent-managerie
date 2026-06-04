@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+
 # Codex Hook Setup
 
 The plugin at `plugins/codex-menagerie-events` contains `hooks/hooks.json` and a small wrapper script.

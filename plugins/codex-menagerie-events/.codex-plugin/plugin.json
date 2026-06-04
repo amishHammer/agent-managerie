@@ -9,7 +9,7 @@
   },
   "homepage": "https://example.invalid/menagerie",
   "repository": "https://example.invalid/menagerie",
-  "license": "Apache-2.0",
+  "license": "AGPL-3.0-only",
   "keywords": ["codex", "hooks", "mqtt", "desktop"],
   "hooks": "./hooks/hooks.json",
   "interface": {

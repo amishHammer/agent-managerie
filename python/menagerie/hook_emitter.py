@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-only
 """Codex command hook entry point."""
 
 from __future__ import annotations

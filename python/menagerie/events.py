@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-only
 """Event normalization for Menagerie MQTT messages."""
 
 from __future__ import annotations

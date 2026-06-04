@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+
 # Menagerie
 
 Menagerie is a Codex activity companion prototype. Each Codex session is tracked internally as a session and shown in the desktop app as a little gremlin.
@@ -110,3 +112,7 @@ curl 'http://localhost:18080/v1/events/recent?workspaceId=demo&limit=20'
 ```sh
 PYTHONPATH=python python3 -m unittest discover -s tests
 ```
+
+## License
+
+Menagerie is licensed under `AGPL-3.0-only`. See [LICENSE](LICENSE).

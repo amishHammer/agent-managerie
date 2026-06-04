@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+
 # MQTT Protocol
 
 Menagerie uses MQTT 3.1.1 for v1.

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-only
 """MQTT event collector with a tiny HTTP backfill API."""
 
 from __future__ import annotations

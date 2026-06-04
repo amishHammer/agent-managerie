@@ -1,4 +1,8 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+
 FROM eclipse-mosquitto:2
+
+LABEL org.opencontainers.image.licenses="AGPL-3.0-only"
 
 USER root
 

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-only
 """Small MQTT 3.1.1 client used by the Menagerie emitters.
 
 The project intentionally avoids Python package dependencies so hooks can run

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-only
 """Publish `codex exec --json` JSONL events to Menagerie MQTT."""
 
 from __future__ import annotations
