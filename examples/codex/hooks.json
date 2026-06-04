@@ -1,0 +1,106 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/bin/sh -lc 'set -a; [ -f \"$HOME/.codex/menagerie.env\" ] && . \"$HOME/.codex/menagerie.env\"; repo=$(git rev-parse --show-toplevel 2>/dev/null || pwd); [ -f \"$repo/.codex/menagerie.env\" ] && . \"$repo/.codex/menagerie.env\"; set +a; [ -n \"$MENAGERIE_HOME\" ] || { echo \"MENAGERIE_HOME is not set\" >&2; exit 1; }; exec \"$MENAGERIE_HOME/bin/codex-menagerie-hook\"'",
+            "timeout": 10,
+            "statusMessage": "Publishing Menagerie session status"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/bin/sh -lc 'set -a; [ -f \"$HOME/.codex/menagerie.env\" ] && . \"$HOME/.codex/menagerie.env\"; repo=$(git rev-parse --show-toplevel 2>/dev/null || pwd); [ -f \"$repo/.codex/menagerie.env\" ] && . \"$repo/.codex/menagerie.env\"; set +a; [ -n \"$MENAGERIE_HOME\" ] || { echo \"MENAGERIE_HOME is not set\" >&2; exit 1; }; exec \"$MENAGERIE_HOME/bin/codex-menagerie-hook\"'",
+            "timeout": 10,
+            "statusMessage": "Publishing Menagerie prompt status"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/bin/sh -lc 'set -a; [ -f \"$HOME/.codex/menagerie.env\" ] && . \"$HOME/.codex/menagerie.env\"; repo=$(git rev-parse --show-toplevel 2>/dev/null || pwd); [ -f \"$repo/.codex/menagerie.env\" ] && . \"$repo/.codex/menagerie.env\"; set +a; [ -n \"$MENAGERIE_HOME\" ] || { echo \"MENAGERIE_HOME is not set\" >&2; exit 1; }; exec \"$MENAGERIE_HOME/bin/codex-menagerie-hook\"'",
+            "timeout": 10,
+            "statusMessage": "Publishing Menagerie tool status"
+          }
+        ]
+      }
+    ],
+    "PermissionRequest": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/bin/sh -lc 'set -a; [ -f \"$HOME/.codex/menagerie.env\" ] && . \"$HOME/.codex/menagerie.env\"; repo=$(git rev-parse --show-toplevel 2>/dev/null || pwd); [ -f \"$repo/.codex/menagerie.env\" ] && . \"$repo/.codex/menagerie.env\"; set +a; [ -n \"$MENAGERIE_HOME\" ] || { echo \"MENAGERIE_HOME is not set\" >&2; exit 1; }; exec \"$MENAGERIE_HOME/bin/codex-menagerie-hook\"'",
+            "timeout": 10,
+            "statusMessage": "Publishing Menagerie permission status"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/bin/sh -lc 'set -a; [ -f \"$HOME/.codex/menagerie.env\" ] && . \"$HOME/.codex/menagerie.env\"; repo=$(git rev-parse --show-toplevel 2>/dev/null || pwd); [ -f \"$repo/.codex/menagerie.env\" ] && . \"$repo/.codex/menagerie.env\"; set +a; [ -n \"$MENAGERIE_HOME\" ] || { echo \"MENAGERIE_HOME is not set\" >&2; exit 1; }; exec \"$MENAGERIE_HOME/bin/codex-menagerie-hook\"'",
+            "timeout": 10,
+            "statusMessage": "Publishing Menagerie tool result"
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "matcher": "manual|auto",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/bin/sh -lc 'set -a; [ -f \"$HOME/.codex/menagerie.env\" ] && . \"$HOME/.codex/menagerie.env\"; repo=$(git rev-parse --show-toplevel 2>/dev/null || pwd); [ -f \"$repo/.codex/menagerie.env\" ] && . \"$repo/.codex/menagerie.env\"; set +a; [ -n \"$MENAGERIE_HOME\" ] || { echo \"MENAGERIE_HOME is not set\" >&2; exit 1; }; exec \"$MENAGERIE_HOME/bin/codex-menagerie-hook\"'",
+            "timeout": 10,
+            "statusMessage": "Publishing Menagerie compaction status"
+          }
+        ]
+      }
+    ],
+    "PostCompact": [
+      {
+        "matcher": "manual|auto",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/bin/sh -lc 'set -a; [ -f \"$HOME/.codex/menagerie.env\" ] && . \"$HOME/.codex/menagerie.env\"; repo=$(git rev-parse --show-toplevel 2>/dev/null || pwd); [ -f \"$repo/.codex/menagerie.env\" ] && . \"$repo/.codex/menagerie.env\"; set +a; [ -n \"$MENAGERIE_HOME\" ] || { echo \"MENAGERIE_HOME is not set\" >&2; exit 1; }; exec \"$MENAGERIE_HOME/bin/codex-menagerie-hook\"'",
+            "timeout": 10,
+            "statusMessage": "Publishing Menagerie compaction result"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/bin/sh -lc 'set -a; [ -f \"$HOME/.codex/menagerie.env\" ] && . \"$HOME/.codex/menagerie.env\"; repo=$(git rev-parse --show-toplevel 2>/dev/null || pwd); [ -f \"$repo/.codex/menagerie.env\" ] && . \"$repo/.codex/menagerie.env\"; set +a; [ -n \"$MENAGERIE_HOME\" ] || { echo \"MENAGERIE_HOME is not set\" >&2; exit 1; }; exec \"$MENAGERIE_HOME/bin/codex-menagerie-hook\"'",
+            "timeout": 10,
+            "statusMessage": "Publishing Menagerie completion status"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -65,20 +65,9 @@ The plugin lives at `plugins/codex-menagerie-events`. It publishes:
 - `PostCompact`
 - `Stop`
 
-Set these environment variables before launching Codex:
-
-```sh
-export MENAGERIE_MQTT_HOST=broker.example.com
-export MENAGERIE_MQTT_PORT=8883
-export MENAGERIE_MQTT_TLS=true
-export MENAGERIE_MQTT_USERNAME=codex-hook
-export MENAGERIE_MQTT_PASSWORD='...'
-export MENAGERIE_WORKSPACE_ID=my-workspace
-```
-
-For local development against Compose, use port `1883`, `MENAGERIE_MQTT_TLS=false`, and the dev hook password.
-
 Hook configuration can be installed either for one working directory or globally.
+
+Hook settings live in `menagerie.env`, copied from [examples/codex/menagerie.env](examples/codex/menagerie.env). Configure `MENAGERIE_HOME`, broker host, credentials, and workspace id there. For local development against Compose, use port `1883`, `MENAGERIE_MQTT_TLS=false`, and the dev hook password.
 
 ### Working Directory Hooks
 
@@ -90,29 +79,15 @@ Use working-directory hooks when only one project should publish Menagerie event
 hooks = true
 ```
 
-Then add `.codex/hooks.json` for that project. Codex discovers `hooks.json` next to active config layers. The hook definitions can mirror `plugins/codex-menagerie-events/hooks/hooks.json`, but each `command` should point at this repository's hook wrapper:
+Then add `.codex/hooks.json` and `.codex/menagerie.env` for that project:
 
-```json
-{
-  "hooks": {
-    "SessionStart": [
-      {
-        "matcher": "startup|resume|clear|compact",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "/absolute/path/to/menagerie/bin/codex-menagerie-hook",
-            "timeout": 10,
-            "statusMessage": "Publishing Menagerie session status"
-          }
-        ]
-      }
-    ]
-  }
-}
+```sh
+mkdir -p .codex
+cp /absolute/path/to/menagerie/examples/codex/hooks.json .codex/hooks.json
+cp /absolute/path/to/menagerie/examples/codex/menagerie.env .codex/menagerie.env
 ```
 
-Repeat the same command shape for the other supported events listed above, or start by copying the plugin `hooks.json` and replacing the `command` values.
+Edit `.codex/menagerie.env` for `MENAGERIE_HOME`, your broker host, password, and workspace id. Keep project-local `.codex/` files out of git because they can contain host paths and secrets.
 
 ### Global Hooks
 
@@ -124,7 +99,15 @@ Use global hooks when every Codex project on the machine should publish Menageri
 hooks = true
 ```
 
-Then put the Menagerie hook definitions in `~/.codex/hooks.json`, again with `command` values pointing at an absolute `bin/codex-menagerie-hook` path.
+Then put the Menagerie hook definitions and environment in your global Codex config:
+
+```sh
+cp /absolute/path/to/menagerie/examples/codex/hooks.json ~/.codex/hooks.json
+cp /absolute/path/to/menagerie/examples/codex/menagerie.env ~/.codex/menagerie.env
+chmod 600 ~/.codex/hooks.json ~/.codex/menagerie.env
+```
+
+Edit `~/.codex/menagerie.env` so `MENAGERIE_HOME` points at your Menagerie checkout.
 
 When using global hooks, set `MENAGERIE_WORKSPACE_ID` per shell or per project launch if you want stable, human-readable workspace names. If it is unset, Menagerie derives a workspace id from the current working directory.
 

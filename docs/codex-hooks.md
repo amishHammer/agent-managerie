@@ -4,18 +4,17 @@
 
 The plugin at `plugins/codex-menagerie-events` contains `hooks/hooks.json` and a small wrapper script.
 
-Before launching Codex, configure MQTT:
+Hook settings live in `menagerie.env`, copied from `examples/codex/menagerie.env`. Configure `MENAGERIE_HOME`, MQTT host, credentials, and workspace id there before launching Codex.
+
+Enable the plugin through Codex's local plugin flow, or copy the sample hook files:
 
 ```sh
-export MENAGERIE_MQTT_HOST=localhost
-export MENAGERIE_MQTT_PORT=1883
-export MENAGERIE_MQTT_TLS=false
-export MENAGERIE_MQTT_USERNAME=codex-hook
-export MENAGERIE_MQTT_PASSWORD=dev-hook-password
-export MENAGERIE_WORKSPACE_ID=my-workspace
+mkdir -p .codex
+cp /absolute/path/to/menagerie/examples/codex/hooks.json .codex/hooks.json
+cp /absolute/path/to/menagerie/examples/codex/menagerie.env .codex/menagerie.env
 ```
 
-Enable the plugin through Codex's local plugin flow, or copy the hook definitions into `~/.codex/hooks.json` and update the `command` fields to point at `bin/codex-menagerie-hook`.
+Set `MENAGERIE_HOME=/actual/path/to/menagerie` in `menagerie.env`. For global hooks, copy the same files to `~/.codex/hooks.json` and `~/.codex/menagerie.env`, then set both files to mode `600`.
 
 Codex requires non-managed command hooks to be reviewed and trusted. Use `/hooks` in Codex to review the hook definitions after installing or changing the plugin.
 
