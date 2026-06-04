@@ -9,7 +9,7 @@ import os
 import re
 import socket
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -18,6 +18,9 @@ TOPIC_ROOT = os.environ.get("MENAGERIE_TOPIC_ROOT", "menagerie/v1").strip("/")
 EVENT_TOPIC_PREFIX = f"{TOPIC_ROOT}/events"
 STATE_TOPIC_PREFIX = f"{TOPIC_ROOT}/state"
 HEALTH_TOPIC_PREFIX = f"{TOPIC_ROOT}/health"
+DEFAULT_IDLE_AFTER_SECONDS = 120
+DEFAULT_DEAD_AFTER_SECONDS = 900
+DEFAULT_EXITED_AFTER_SECONDS = 3600
 
 SECRET_PATTERNS = [
     re.compile(r"sk-[A-Za-z0-9_-]{16,}"),
@@ -157,7 +160,11 @@ STATE_BY_JSONL_TYPE = {
 
 
 def now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+    return to_iso(datetime.now(timezone.utc))
+
+
+def to_iso(value: datetime) -> str:
+    return value.astimezone(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
 
 
 def stable_hash(value: str, length: int = 12) -> str:
@@ -209,6 +216,21 @@ def env_value(name: str, legacy_name: str | None = None) -> str | None:
 
 def env_bool(name: str, legacy_name: str | None = None) -> bool:
     return str(env_value(name, legacy_name) or "").lower() in {"1", "true", "yes", "on"}
+
+
+def env_int(name: str, default: int, legacy_name: str | None = None) -> int:
+    value = env_value(name, legacy_name)
+    if value is None:
+        return default
+    try:
+        parsed = int(value)
+    except ValueError:
+        return default
+    return max(parsed, 0)
+
+
+def parse_iso(value: str) -> datetime:
+    return datetime.fromisoformat(value.replace("Z", "+00:00")).astimezone(timezone.utc)
 
 
 def cwd_from_raw(raw: dict[str, Any]) -> str:
@@ -446,6 +468,33 @@ def stream_preview(payload: dict[str, Any]) -> str | None:
     return None
 
 
+def lifecycle_document(event_name: str, ts: str, state: str) -> dict[str, Any]:
+    idle_seconds = env_int("MENAGERIE_IDLE_AFTER_SECONDS", DEFAULT_IDLE_AFTER_SECONDS)
+    dead_seconds = env_int("MENAGERIE_DEAD_AFTER_SECONDS", DEFAULT_DEAD_AFTER_SECONDS)
+    exited_seconds = env_int("MENAGERIE_EXITED_AFTER_SECONDS", DEFAULT_EXITED_AFTER_SECONDS)
+    dead_seconds = max(dead_seconds, idle_seconds)
+    exited_seconds = max(exited_seconds, dead_seconds)
+
+    seen_at = parse_iso(ts)
+    starts_idle = state in {"idle", "readyForReview"} or event_name in {"stop", "subagentStop"}
+    idle_after = seen_at if starts_idle else seen_at + timedelta(seconds=idle_seconds)
+    dead_after = seen_at + timedelta(seconds=dead_seconds)
+    exited_after = seen_at + timedelta(seconds=exited_seconds)
+    return {
+        "schema": "menagerie.lifecycle.v1",
+        "status": "idle" if starts_idle else "active",
+        "lastSeenAt": ts,
+        "idleAfter": to_iso(idle_after),
+        "deadAfter": to_iso(dead_after),
+        "exitedAfter": to_iso(exited_after),
+        "idleState": "idle",
+        "deadState": "dead",
+        "exitedState": "exited",
+        "inference": "timeout",
+        "reason": "turnComplete" if starts_idle else "activityObserved",
+    }
+
+
 def normalize_hook_event(raw: dict[str, Any]) -> dict[str, Any]:
     cwd = cwd_from_raw(raw)
     workspace_id = workspace_id_for(cwd)
@@ -455,9 +504,10 @@ def normalize_hook_event(raw: dict[str, Any]) -> dict[str, Any]:
     severity = hook_severity(event_name, raw)
     summary = hook_summary(event_name, raw)
     payload = hook_payload(raw)
+    ts = now_iso()
     return {
         "id": str(uuid.uuid4()),
-        "ts": now_iso(),
+        "ts": ts,
         "source": "codex-hook",
         "kind": f"codex.hook.{event_name}",
         "severity": severity,
@@ -468,6 +518,7 @@ def normalize_hook_event(raw: dict[str, Any]) -> dict[str, Any]:
         "model": raw.get("model"),
         "state": state,
         "summary": summary,
+        "lifecycle": lifecycle_document(event_name, ts, state),
         "streamItem": hook_stream_item(
             event_name,
             raw,
@@ -489,9 +540,10 @@ def normalize_jsonl_event(raw: dict[str, Any], *, workspace_id: str, session_id:
     state = STATE_BY_JSONL_TYPE.get(event_type)
     severity = "error" if event_type in {"error", "turn.failed"} else "info"
     summary = jsonl_summary(event_type, raw)
+    ts = now_iso()
     return {
         "id": str(uuid.uuid4()),
-        "ts": now_iso(),
+        "ts": ts,
         "source": "codex-exec-jsonl",
         "kind": f"codex.exec.{event_type}",
         "severity": severity,
@@ -502,6 +554,7 @@ def normalize_jsonl_event(raw: dict[str, Any], *, workspace_id: str, session_id:
         "model": raw.get("model"),
         "state": state,
         "summary": summary,
+        "lifecycle": lifecycle_document(event_type, ts, state) if state else None,
         "payload": redact_json(raw),
     }
 
@@ -538,6 +591,7 @@ def state_document(event: dict[str, Any]) -> dict[str, Any]:
         "summary": event.get("summary") or "",
         "lastEventKind": event.get("kind"),
         "lastStreamItem": event.get("streamItem"),
+        "lifecycle": event.get("lifecycle"),
     }
 
 
@@ -552,6 +606,23 @@ def health_document(client_id: str, status: str = "online") -> dict[str, Any]:
     }
 
 
+def session_health_document(event: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": f"{event['id']}:session-health",
+        "ts": event["ts"],
+        "source": event["source"],
+        "schema": "menagerie.sessionHealth.v1",
+        "kind": "menagerie.sessionHealth",
+        "workspaceId": event["workspaceId"],
+        "sessionId": event["sessionId"],
+        "turnId": event.get("turnId"),
+        "sessionState": event.get("state"),
+        "summary": event.get("summary") or "",
+        "lastEventKind": event.get("kind"),
+        "lifecycle": event.get("lifecycle"),
+    }
+
+
 def topics_for(event: dict[str, Any]) -> tuple[str, str]:
     workspace = topic_segment(event.get("workspaceId"), "workspace")
     session = topic_segment(event.get("sessionId"), "unknown")
@@ -563,6 +634,12 @@ def topics_for(event: dict[str, Any]) -> tuple[str, str]:
 
 def health_topic(client_id: str) -> str:
     return f"{HEALTH_TOPIC_PREFIX}/{topic_segment(client_id, 'client')}"
+
+
+def session_health_topic(event: dict[str, Any]) -> str:
+    workspace = topic_segment(event.get("workspaceId"), "workspace")
+    session = topic_segment(event.get("sessionId"), "unknown")
+    return f"{HEALTH_TOPIC_PREFIX}/session/{workspace}/{session}"
 
 
 def dumps(value: dict[str, Any]) -> str:

@@ -7,7 +7,17 @@ import os
 import uuid
 from dataclasses import dataclass
 
-from .events import dumps, env_bool, env_value, health_document, health_topic, state_document, topics_for
+from .events import (
+    dumps,
+    env_bool,
+    env_value,
+    health_document,
+    health_topic,
+    session_health_document,
+    session_health_topic,
+    state_document,
+    topics_for,
+)
 from .mqtt import MqttClient
 
 
@@ -78,6 +88,12 @@ def publish_event(event: dict) -> None:
         client.publish(event_topic, dumps(event), qos=1, retain=False)
         if event.get("state"):
             client.publish(state_topic, dumps(state_document(event)), qos=1, retain=True)
+            client.publish(
+                session_health_topic(event),
+                dumps(session_health_document(event)),
+                qos=1,
+                retain=True,
+            )
         client.publish(
             health_topic(settings.client_id),
             dumps(health_document(settings.client_id)),

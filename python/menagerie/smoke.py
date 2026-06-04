@@ -8,7 +8,15 @@ import os
 import sys
 import urllib.request
 
-from .events import dumps, env_value, normalize_hook_event, state_document, topics_for
+from .events import (
+    dumps,
+    env_value,
+    normalize_hook_event,
+    session_health_document,
+    session_health_topic,
+    state_document,
+    topics_for,
+)
 from .publisher import client_from_settings, mqtt_settings
 
 
@@ -29,6 +37,7 @@ def publish() -> int:
         event_topic, state_topic = topics_for(event)
         client.publish(event_topic, dumps(event), qos=1, retain=False)
         client.publish(state_topic, dumps(state_document(event)), qos=1, retain=True)
+        client.publish(session_health_topic(event), dumps(session_health_document(event)), qos=1, retain=True)
     finally:
         client.disconnect()
     print(dumps(event))

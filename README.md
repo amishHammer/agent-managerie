@@ -121,6 +121,12 @@ Codex requires non-managed command hooks to be reviewed and trusted. Use `/hooks
 
 Hook payloads redact prompts, commands, and assistant text by default. Set `MENAGERIE_INCLUDE_TEXT=true` only for trusted test brokers. Set `MENAGERIE_INCLUDE_RAW=true` only for local debugging.
 
+Menagerie does not rely on a Codex session-end hook. Instead, retained session state includes timeout metadata that lets the desktop app infer idle, dead, and exited gremlins. Tune it with:
+
+- `MENAGERIE_IDLE_AFTER_SECONDS`, default `120`
+- `MENAGERIE_DEAD_AFTER_SECONDS`, default `900`
+- `MENAGERIE_EXITED_AFTER_SECONDS`, default `3600`
+
 ## Non-Interactive Adapter
 
 Pipe `codex exec --json` into the JSONL adapter:

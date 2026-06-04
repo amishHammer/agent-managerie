@@ -1,8 +1,20 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 import os
 import unittest
+from datetime import datetime
 
-from menagerie.events import normalize_hook_event, normalize_jsonl_event, state_document, topics_for
+from menagerie.events import (
+    normalize_hook_event,
+    normalize_jsonl_event,
+    session_health_document,
+    session_health_topic,
+    state_document,
+    topics_for,
+)
+
+
+def _parse_iso(value: str) -> datetime:
+    return datetime.fromisoformat(value.replace("Z", "+00:00"))
 
 
 class EventNormalizationTests(unittest.TestCase):
@@ -10,6 +22,9 @@ class EventNormalizationTests(unittest.TestCase):
         self.old_env = dict(os.environ)
         os.environ.pop("MENAGERIE_INCLUDE_TEXT", None)
         os.environ.pop("MENAGERIE_INCLUDE_RAW", None)
+        os.environ.pop("MENAGERIE_IDLE_AFTER_SECONDS", None)
+        os.environ.pop("MENAGERIE_DEAD_AFTER_SECONDS", None)
+        os.environ.pop("MENAGERIE_EXITED_AFTER_SECONDS", None)
         os.environ["MENAGERIE_WORKSPACE_ID"] = "demo-workspace"
 
     def tearDown(self):
@@ -38,6 +53,10 @@ class EventNormalizationTests(unittest.TestCase):
         self.assertTrue(event["streamItem"]["contentRedacted"])
         self.assertEqual(event["streamItem"]["refs"]["promptHash"], event["payload"]["promptHash"])
         self.assertNotIn("preview", event["streamItem"])
+        self.assertEqual(event["lifecycle"]["schema"], "menagerie.lifecycle.v1")
+        self.assertEqual(event["lifecycle"]["status"], "active")
+        self.assertEqual(event["lifecycle"]["lastSeenAt"], event["ts"])
+        self.assertGreater(_parse_iso(event["lifecycle"]["idleAfter"]), _parse_iso(event["ts"]))
 
     def test_permission_request_sets_attention_state(self):
         event = normalize_hook_event(
@@ -91,6 +110,43 @@ class EventNormalizationTests(unittest.TestCase):
         self.assertEqual(state["lastStreamItem"]["kind"], "tool.completed")
         self.assertEqual(state["lastStreamItem"]["tone"], "warning")
         self.assertEqual(state["lastStreamItem"]["context"]["exitCode"], 1)
+        self.assertEqual(state["lifecycle"]["status"], "active")
+
+    def test_stop_state_is_idle_then_times_out_to_dead_and_exited(self):
+        os.environ["MENAGERIE_IDLE_AFTER_SECONDS"] = "10"
+        os.environ["MENAGERIE_DEAD_AFTER_SECONDS"] = "20"
+        os.environ["MENAGERIE_EXITED_AFTER_SECONDS"] = "30"
+        event = normalize_hook_event(
+            {
+                "hook_event_name": "Stop",
+                "session_id": "session-3",
+                "cwd": "/tmp/demo",
+            }
+        )
+        lifecycle = event["lifecycle"]
+        self.assertEqual(lifecycle["status"], "idle")
+        self.assertEqual(lifecycle["idleAfter"], event["ts"])
+        self.assertEqual(lifecycle["reason"], "turnComplete")
+        self.assertGreater(_parse_iso(lifecycle["deadAfter"]), _parse_iso(lifecycle["idleAfter"]))
+        self.assertGreater(_parse_iso(lifecycle["exitedAfter"]), _parse_iso(lifecycle["deadAfter"]))
+
+    def test_session_health_document_carries_lifecycle_without_overwriting_state_shape(self):
+        event = normalize_hook_event(
+            {
+                "hook_event_name": "UserPromptSubmit",
+                "session_id": "session-4",
+                "cwd": "/tmp/demo",
+            }
+        )
+        topic = session_health_topic(event)
+        health = session_health_document(event)
+        self.assertEqual(topic, "menagerie/v1/health/session/demo-workspace/session-4")
+        self.assertEqual(health["id"], f"{event['id']}:session-health")
+        self.assertEqual(health["schema"], "menagerie.sessionHealth.v1")
+        self.assertEqual(health["kind"], "menagerie.sessionHealth")
+        self.assertEqual(health["sessionState"], "thinking")
+        self.assertEqual(health["lifecycle"]["status"], "active")
+        self.assertNotIn("state", health)
 
     def test_topics_are_versioned(self):
         event = normalize_hook_event(
@@ -113,6 +169,7 @@ class EventNormalizationTests(unittest.TestCase):
         self.assertEqual(event["source"], "codex-exec-jsonl")
         self.assertEqual(event["sessionId"], "thread-1")
         self.assertEqual(event["state"], "starting")
+        self.assertEqual(event["lifecycle"]["status"], "active")
 
 
 if __name__ == "__main__":

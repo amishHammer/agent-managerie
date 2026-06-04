@@ -14,6 +14,8 @@ from .events import (
     health_document,
     health_topic,
     normalize_jsonl_event,
+    session_health_document,
+    session_health_topic,
     state_document,
     topics_for,
     workspace_id_for,
@@ -64,6 +66,12 @@ def main() -> int:
             client.publish(event_topic, dumps(event), qos=1, retain=False)
             if event.get("state"):
                 client.publish(state_topic, dumps(state_document(event)), qos=1, retain=True)
+                client.publish(
+                    session_health_topic(event),
+                    dumps(session_health_document(event)),
+                    qos=1,
+                    retain=True,
+                )
     finally:
         client.disconnect()
     return 0

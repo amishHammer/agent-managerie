@@ -31,3 +31,5 @@ Codex requires non-managed command hooks to be reviewed and trusted. Use `/hooks
 - `Stop`: moves the session to `readyForReview`.
 
 The hook process exits successfully even when MQTT is unavailable, so Codex work is not blocked by Menagerie infrastructure.
+
+Codex currently uses `Stop` for turn completion rather than a first-class session-end hook. Menagerie publishes timeout metadata with retained state so clients can infer `idle`, `dead`, and `exited` display states when no later hook arrives.
