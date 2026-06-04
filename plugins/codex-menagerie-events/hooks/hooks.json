@@ -1,0 +1,106 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$PLUGIN_ROOT/scripts/codex_menagerie_hook.py\"",
+            "timeout": 10,
+            "statusMessage": "Publishing Menagerie session status"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$PLUGIN_ROOT/scripts/codex_menagerie_hook.py\"",
+            "timeout": 10,
+            "statusMessage": "Publishing Menagerie prompt status"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$PLUGIN_ROOT/scripts/codex_menagerie_hook.py\"",
+            "timeout": 10,
+            "statusMessage": "Publishing Menagerie tool status"
+          }
+        ]
+      }
+    ],
+    "PermissionRequest": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$PLUGIN_ROOT/scripts/codex_menagerie_hook.py\"",
+            "timeout": 10,
+            "statusMessage": "Publishing Menagerie permission status"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$PLUGIN_ROOT/scripts/codex_menagerie_hook.py\"",
+            "timeout": 10,
+            "statusMessage": "Publishing Menagerie tool result"
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "matcher": "manual|auto",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$PLUGIN_ROOT/scripts/codex_menagerie_hook.py\"",
+            "timeout": 10,
+            "statusMessage": "Publishing Menagerie compaction status"
+          }
+        ]
+      }
+    ],
+    "PostCompact": [
+      {
+        "matcher": "manual|auto",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$PLUGIN_ROOT/scripts/codex_menagerie_hook.py\"",
+            "timeout": 10,
+            "statusMessage": "Publishing Menagerie compaction result"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$PLUGIN_ROOT/scripts/codex_menagerie_hook.py\"",
+            "timeout": 10,
+            "statusMessage": "Publishing Menagerie completion status"
+          }
+        ]
+      }
+    ]
+  }
+}

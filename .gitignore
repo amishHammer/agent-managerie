@@ -1,0 +1,11 @@
+.env
+*.pyc
+__pycache__/
+.DS_Store
+.build/
+DerivedData/
+*.xcuserstate
+*.xcuserdata/
+mosquitto.db
+*.sqlite3
+

@@ -1,0 +1,40 @@
+services:
+  mqtt:
+    build:
+      context: ./broker
+    environment:
+      MQTT_HOOK_USERNAME: ${MQTT_HOOK_USERNAME:-codex-hook}
+      MQTT_HOOK_PASSWORD: ${MQTT_HOOK_PASSWORD:-dev-hook-password}
+      MQTT_APP_USERNAME: ${MQTT_APP_USERNAME:-menagerie-app}
+      MQTT_APP_PASSWORD: ${MQTT_APP_PASSWORD:-dev-menagerie-password}
+      MQTT_COLLECTOR_USERNAME: ${MQTT_COLLECTOR_USERNAME:-codex-collector}
+      MQTT_COLLECTOR_PASSWORD: ${MQTT_COLLECTOR_PASSWORD:-dev-collector-password}
+      MQTT_TOPIC_ROOT: ${MQTT_TOPIC_ROOT:-menagerie/v1}
+    ports:
+      - "${MQTT_PLAIN_PORT:-1883}:1883"
+    volumes:
+      - mqtt-data:/mosquitto/data
+
+  collector:
+    build:
+      context: .
+      dockerfile: services/collector/Dockerfile
+    depends_on:
+      - mqtt
+    environment:
+      MQTT_HOST: mqtt
+      MQTT_PORT: "1883"
+      MQTT_USERNAME: ${MQTT_COLLECTOR_USERNAME:-codex-collector}
+      MQTT_PASSWORD: ${MQTT_COLLECTOR_PASSWORD:-dev-collector-password}
+      MQTT_TLS: "false"
+      MQTT_CLIENT_ID: menagerie-collector
+      COLLECTOR_DB: /data/menagerie-events.sqlite3
+      COLLECTOR_HTTP_PORT: "8080"
+    ports:
+      - "${COLLECTOR_HTTP_PORT:-18080}:8080"
+    volumes:
+      - collector-data:/data
+
+volumes:
+  mqtt-data:
+  collector-data:

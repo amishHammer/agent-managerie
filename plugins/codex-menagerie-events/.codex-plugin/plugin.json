@@ -1,0 +1,31 @@
+{
+  "name": "codex-menagerie-events",
+  "version": "0.1.0",
+  "description": "Publish Codex lifecycle hook events to a Menagerie MQTT broker.",
+  "author": {
+    "name": "Menagerie",
+    "email": "menagerie@example.invalid",
+    "url": "https://example.invalid/menagerie"
+  },
+  "homepage": "https://example.invalid/menagerie",
+  "repository": "https://example.invalid/menagerie",
+  "license": "Apache-2.0",
+  "keywords": ["codex", "hooks", "mqtt", "desktop"],
+  "hooks": "./hooks/hooks.json",
+  "interface": {
+    "displayName": "Codex Menagerie Events",
+    "shortDescription": "Send Codex lifecycle events to a Menagerie MQTT broker.",
+    "longDescription": "Adds non-blocking command hooks that publish redacted Codex lifecycle events to a remote MQTT broker for desktop gremlins and status dashboards.",
+    "developerName": "Menagerie",
+    "category": "Productivity",
+    "capabilities": ["Hooks"],
+    "websiteURL": "https://example.invalid/menagerie",
+    "privacyPolicyURL": "https://example.invalid/menagerie/privacy",
+    "termsOfServiceURL": "https://example.invalid/menagerie/terms",
+    "defaultPrompt": [
+      "Show Codex activity in my desktop gremlin.",
+      "Publish this session's status to MQTT."
+    ],
+    "brandColor": "#2F6F7E"
+  }
+}
