@@ -67,6 +67,58 @@ export MENAGERIE_WORKSPACE_ID=my-workspace
 
 For local development against Compose, use port `1883`, `MENAGERIE_MQTT_TLS=false`, and the dev hook password.
 
+Hook configuration can be installed either for one working directory or globally.
+
+### Working Directory Hooks
+
+Use working-directory hooks when only one project should publish Menagerie events. Add a project-local Codex config:
+
+```toml
+# .codex/config.toml
+[features]
+hooks = true
+```
+
+Then add `.codex/hooks.json` for that project. Codex discovers `hooks.json` next to active config layers. The hook definitions can mirror `plugins/codex-menagerie-events/hooks/hooks.json`, but each `command` should point at this repository's hook wrapper:
+
+```json
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/absolute/path/to/menagerie/bin/codex-menagerie-hook",
+            "timeout": 10,
+            "statusMessage": "Publishing Menagerie session status"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+Repeat the same command shape for the other supported events listed above, or start by copying the plugin `hooks.json` and replacing the `command` values.
+
+### Global Hooks
+
+Use global hooks when every Codex project on the machine should publish Menagerie events. Enable hooks in your global Codex config:
+
+```toml
+# ~/.codex/config.toml
+[features]
+hooks = true
+```
+
+Then put the Menagerie hook definitions in `~/.codex/hooks.json`, again with `command` values pointing at an absolute `bin/codex-menagerie-hook` path.
+
+When using global hooks, set `MENAGERIE_WORKSPACE_ID` per shell or per project launch if you want stable, human-readable workspace names. If it is unset, Menagerie derives a workspace id from the current working directory.
+
+Codex requires non-managed command hooks to be reviewed and trusted. Use `/hooks` in Codex after adding or changing either working-directory or global hook configuration.
+
 Hook payloads redact prompts, commands, and assistant text by default. Set `MENAGERIE_INCLUDE_TEXT=true` only for trusted test brokers. Set `MENAGERIE_INCLUDE_RAW=true` only for local debugging.
 
 ## Non-Interactive Adapter

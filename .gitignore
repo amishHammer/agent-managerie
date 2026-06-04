@@ -9,3 +9,6 @@ DerivedData/
 mosquitto.db
 *.sqlite3
 
+# Local Codex config/state can contain host paths, broker endpoints, and secrets.
+.codex/
+.agents/

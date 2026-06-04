@@ -64,6 +64,89 @@ SUMMARY_BY_HOOK_EVENT = {
     "stop": "Turn stopped",
 }
 
+STREAM_BY_HOOK_EVENT = {
+    "sessionStart": {
+        "kind": "session.started",
+        "role": "system",
+        "title": "A gremlin woke up",
+        "body": "A Codex session started.",
+        "icon": "sparkles",
+        "tone": "active",
+    },
+    "userPromptSubmit": {
+        "kind": "prompt.submitted",
+        "role": "user",
+        "title": "A prompt landed",
+        "body": "The gremlin is thinking over the latest prompt.",
+        "icon": "message",
+        "tone": "active",
+    },
+    "preToolUse": {
+        "kind": "tool.started",
+        "role": "tool",
+        "title": "Tool work started",
+        "body": "The gremlin reached for a tool.",
+        "icon": "terminal",
+        "tone": "active",
+    },
+    "permissionRequest": {
+        "kind": "permission.requested",
+        "role": "tool",
+        "title": "Permission needed",
+        "body": "The gremlin needs permission before continuing.",
+        "icon": "lock",
+        "tone": "attention",
+    },
+    "postToolUse": {
+        "kind": "tool.completed",
+        "role": "tool",
+        "title": "Tool work finished",
+        "body": "The gremlin put the tool away.",
+        "icon": "check",
+        "tone": "neutral",
+    },
+    "preCompact": {
+        "kind": "context.compacting",
+        "role": "system",
+        "title": "Packing context",
+        "body": "The gremlin is compressing the conversation.",
+        "icon": "archive",
+        "tone": "active",
+    },
+    "postCompact": {
+        "kind": "context.compacted",
+        "role": "system",
+        "title": "Context packed",
+        "body": "The gremlin finished compressing the conversation.",
+        "icon": "archive",
+        "tone": "neutral",
+    },
+    "subagentStart": {
+        "kind": "subagent.started",
+        "role": "codex",
+        "title": "A helper joined",
+        "body": "A subagent started working in the background.",
+        "icon": "users",
+        "tone": "active",
+    },
+    "subagentStop": {
+        "kind": "subagent.stopped",
+        "role": "codex",
+        "title": "A helper wrapped up",
+        "body": "A subagent finished its work.",
+        "icon": "users",
+        "tone": "neutral",
+    },
+    "stop": {
+        "kind": "turn.completed",
+        "role": "codex",
+        "title": "Ready for review",
+        "body": "The gremlin is ready for you to look things over.",
+        "icon": "flag",
+        "tone": "success",
+    },
+}
+
 STATE_BY_JSONL_TYPE = {
     "thread.started": "starting",
     "turn.started": "thinking",
@@ -238,26 +321,162 @@ def hook_payload(raw: dict[str, Any]) -> dict[str, Any]:
     return payload
 
 
+def _tool_response(raw: dict[str, Any]) -> dict[str, Any] | None:
+    response = raw.get("tool_response") or raw.get("toolResponse")
+    return response if isinstance(response, dict) else None
+
+
+def _exit_code(raw: dict[str, Any]) -> int | None:
+    response = _tool_response(raw)
+    if not response:
+        return None
+    value = response.get("exit_code") if "exit_code" in response else response.get("exitCode")
+    return value if isinstance(value, int) else None
+
+
+def _string_payload_value(raw: dict[str, Any], *keys: str) -> str | None:
+    for key in keys:
+        value = raw.get(key)
+        if value:
+            return str(value)
+    return None
+
+
+def hook_stream_item(
+    event_name: str,
+    raw: dict[str, Any],
+    *,
+    state: str,
+    severity: str,
+    summary: str,
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    template = STREAM_BY_HOOK_EVENT.get(
+        event_name,
+        {
+            "kind": f"hook.{event_name}",
+            "role": "system",
+            "title": "Codex activity",
+            "body": summary,
+            "icon": "activity",
+            "tone": "neutral",
+        },
+    )
+    tool_name = _string_payload_value(raw, "tool_name", "toolName")
+    trigger = _string_payload_value(raw, "trigger")
+    agent_type = _string_payload_value(raw, "agent_type", "agentType")
+    exit_code = _exit_code(raw)
+    refs: dict[str, Any] = {}
+    for key in [
+        "promptHash",
+        "toolCommandHash",
+        "lastAssistantMessageHash",
+        "toolUseId",
+        "agentId",
+        "agentType",
+        "trigger",
+    ]:
+        if key in payload:
+            refs[key] = payload[key]
+    item: dict[str, Any] = {
+        "schema": "menagerie.streamItem.v1",
+        "kind": template["kind"],
+        "role": template["role"],
+        "state": state,
+        "severity": severity,
+        "tone": stream_tone(event_name, severity, exit_code, str(template["tone"])),
+        "icon": template["icon"],
+        "title": template["title"],
+        "body": template["body"],
+        "contentRedacted": True,
+    }
+    if refs:
+        item["refs"] = refs
+    if tool_name:
+        item["subject"] = tool_name
+        item["body"] = stream_body_with_subject(event_name, str(template["body"]), tool_name, exit_code)
+    if trigger:
+        item["subject"] = trigger if not item.get("subject") else item["subject"]
+        item["context"] = {"trigger": trigger}
+    if agent_type:
+        item.setdefault("context", {})["agentType"] = agent_type
+    if exit_code is not None:
+        item.setdefault("context", {})["exitCode"] = exit_code
+    preview = stream_preview(payload)
+    if preview:
+        item["preview"] = preview
+        item["contentRedacted"] = False
+    return item
+
+
+def stream_tone(event_name: str, severity: str, exit_code: int | None, default: str) -> str:
+    if severity == "attention":
+        return "attention"
+    if severity == "warning" or (exit_code is not None and exit_code != 0):
+        return "warning"
+    if event_name in {"stop", "subagentStop"}:
+        return "success"
+    return default
+
+
+def stream_body_with_subject(event_name: str, body: str, subject: str, exit_code: int | None) -> str:
+    if event_name == "preToolUse":
+        return f"The gremlin started using {subject}."
+    if event_name == "permissionRequest":
+        return f"The gremlin needs permission to use {subject}."
+    if event_name == "postToolUse" and exit_code not in (None, 0):
+        return f"{subject} finished with exit code {exit_code}."
+    if event_name == "postToolUse":
+        return f"The gremlin finished using {subject}."
+    return body
+
+
+def stream_preview(payload: dict[str, Any]) -> str | None:
+    for key in ["promptPreview", "lastAssistantMessagePreview"]:
+        value = payload.get(key)
+        if isinstance(value, str):
+            return value
+    tool_preview = payload.get("toolInputPreview")
+    if isinstance(tool_preview, dict):
+        command = tool_preview.get("command")
+        if isinstance(command, str):
+            return redact_text(command, limit=180)
+        keys = ", ".join(str(key) for key in tool_preview.keys())
+        return f"Tool input: {keys}" if keys else None
+    return None
+
+
 def normalize_hook_event(raw: dict[str, Any]) -> dict[str, Any]:
     cwd = cwd_from_raw(raw)
     workspace_id = workspace_id_for(cwd)
     session_id = session_id_from(raw, fallback=cwd_hash(cwd))
     event_name = canonical_hook_event(raw)
     state = STATE_BY_HOOK_EVENT.get(event_name, "thinking")
+    severity = hook_severity(event_name, raw)
+    summary = hook_summary(event_name, raw)
+    payload = hook_payload(raw)
     return {
         "id": str(uuid.uuid4()),
         "ts": now_iso(),
         "source": "codex-hook",
         "kind": f"codex.hook.{event_name}",
-        "severity": hook_severity(event_name, raw),
+        "severity": severity,
         "workspaceId": workspace_id,
         "sessionId": session_id,
         "turnId": turn_id_from(raw),
         "cwdHash": cwd_hash(cwd),
         "model": raw.get("model"),
         "state": state,
-        "summary": hook_summary(event_name, raw),
-        "payload": hook_payload(raw),
+        "summary": summary,
+        "streamItem": hook_stream_item(
+            event_name,
+            raw,
+            state=state,
+            severity=severity,
+            summary=summary,
+            payload=payload,
+        ),
+        "payload": payload,
     }
 
 
@@ -318,6 +537,7 @@ def state_document(event: dict[str, Any]) -> dict[str, Any]:
         "severity": event.get("severity") or "info",
         "summary": event.get("summary") or "",
         "lastEventKind": event.get("kind"),
+        "lastStreamItem": event.get("streamItem"),
     }
 
 
