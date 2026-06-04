@@ -4,16 +4,23 @@ import Network
 
 final class MQTTClient {
     private let settings: MenagerieSettings
+    private let queue = DispatchQueue(label: "dev.menagerie.mqtt")
+    private let keepAliveSeconds: UInt16 = 30
     private var connection: NWConnection?
+    private var keepAliveTimer: DispatchSourceTimer?
     private var packetId: UInt16 = 1
-    private var onMessage: ((String, String) -> Void)?
+    private var onMessage: ((String, String, Bool) -> Void)?
     private var onState: ((Bool) -> Void)?
 
     init(settings: MenagerieSettings) {
         self.settings = settings
     }
 
-    func connect(onState: @escaping (Bool) -> Void, onMessage: @escaping (String, String) -> Void) {
+    deinit {
+        stopKeepAlive()
+    }
+
+    func connect(onState: @escaping (Bool) -> Void, onMessage: @escaping (String, String, Bool) -> Void) {
         self.onState = onState
         self.onMessage = onMessage
 
@@ -32,20 +39,71 @@ final class MQTTClient {
             switch state {
             case .ready:
                 self?.sendConnect()
-            case .failed, .cancelled:
+            case .waiting, .failed, .cancelled:
+                self?.stopKeepAlive()
                 self?.onState?(false)
             default:
                 break
             }
         }
-        connection.start(queue: DispatchQueue(label: "dev.menagerie.mqtt"))
+        connection.start(queue: queue)
     }
 
     func disconnect() {
+        stopKeepAlive()
         send(bytes: [0xE0, 0x00])
         connection?.cancel()
         connection = nil
         onState?(false)
+    }
+
+    func clearRetainedMessage(topic: String) {
+        guard !topic.isEmpty else { return }
+        publish(topic: topic, payload: "", retain: true)
+    }
+
+    func clearRetainedSessionState(workspaceId: String, sessionId: String) {
+        guard !workspaceId.isEmpty, !sessionId.isEmpty else { return }
+        clearRetainedMessage(topic: "menagerie/v1/state/\(workspaceId)/\(sessionId)")
+    }
+
+    func clearRetainedSessionHealth(workspaceId: String, sessionId: String) {
+        guard !workspaceId.isEmpty, !sessionId.isEmpty else { return }
+        clearRetainedMessage(topic: "menagerie/v1/health/session/\(workspaceId)/\(sessionId)")
+    }
+
+    func publishSessionProfile(workspaceId: String, sessionId: String, displayName: String?) -> SessionProfileDocument? {
+        guard !workspaceId.isEmpty, !sessionId.isEmpty else { return nil }
+        let trimmedName = displayName?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let sanitizedName = trimmedName?.isEmpty == true ? nil : trimmedName.map { String($0.prefix(80)) }
+        let summary = sanitizedName.map { "Session named \($0)" } ?? "Session name cleared"
+        let profile = SessionProfileDocument(
+            id: UUID().uuidString,
+            ts: Self.timestamp(),
+            source: "menagerie-macos",
+            schema: "menagerie.sessionProfile.v1",
+            kind: "menagerie.sessionProfile",
+            workspaceId: workspaceId,
+            sessionId: sessionId,
+            displayName: sanitizedName,
+            summary: summary
+        )
+        guard let data = try? JSONEncoder().encode(profile),
+              let payload = String(data: data, encoding: .utf8) else {
+            return nil
+        }
+        publish(topic: Self.sessionProfileTopic(workspaceId: workspaceId, sessionId: sessionId), payload: payload, retain: true)
+        return profile
+    }
+
+    static func sessionProfileTopic(workspaceId: String, sessionId: String) -> String {
+        "menagerie/v1/profile/session/\(workspaceId)/\(sessionId)"
+    }
+
+    private static func timestamp() -> String {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter.string(from: Date())
     }
 
     private func sendConnect() {
@@ -56,7 +114,8 @@ final class MQTTClient {
         let password = KeychainPasswordStore.read()
         if !password.isEmpty { flags |= 0x40 }
         variable.append(flags)
-        variable.append(contentsOf: [0x00, 0x1E])
+        variable.append(UInt8(keepAliveSeconds >> 8))
+        variable.append(UInt8(keepAliveSeconds & 0xFF))
 
         var payload = packString("menagerie-macos-\(UUID().uuidString)")
         if !settings.username.isEmpty {
@@ -71,6 +130,7 @@ final class MQTTClient {
                 self?.onState?(false)
                 return
             }
+            self?.startKeepAlive()
             self?.onState?(true)
             self?.subscribe()
         }
@@ -80,11 +140,17 @@ final class MQTTClient {
         let workspace = settings.workspaceId.isEmpty ? "#" : settings.workspaceId
         let stateTopic = "menagerie/v1/state/\(workspace == "#" ? "#" : "\(workspace)/#")"
         let eventTopic = "menagerie/v1/events/\(workspace == "#" ? "#" : "\(workspace)/#")"
+        let healthTopic = "menagerie/v1/health/\(workspace == "#" ? "#" : "session/\(workspace)/#")"
+        let profileTopic = "menagerie/v1/profile/session/\(workspace == "#" ? "#" : "\(workspace)/#")"
         let id = nextPacketId()
         var body = [UInt8(UInt16(id) >> 8), UInt8(UInt16(id) & 0xFF)]
         body.append(contentsOf: packString(stateTopic))
         body.append(1)
         body.append(contentsOf: packString(eventTopic))
+        body.append(1)
+        body.append(contentsOf: packString(healthTopic))
+        body.append(1)
+        body.append(contentsOf: packString(profileTopic))
         body.append(1)
         sendPacket(typeAndFlags: 0x82, body: body)
         receivePacket { [weak self] type, _ in
@@ -98,13 +164,13 @@ final class MQTTClient {
         receivePacket { [weak self] type, body in
             guard let self else { return }
             if type >> 4 == 3, let message = self.parsePublish(type: type, body: body) {
-                self.onMessage?(message.topic, message.payload)
+                self.onMessage?(message.topic, message.payload, message.retained)
             }
             self.receiveLoop()
         }
     }
 
-    private func parsePublish(type: UInt8, body: [UInt8]) -> (topic: String, payload: String)? {
+    private func parsePublish(type: UInt8, body: [UInt8]) -> (topic: String, payload: String, retained: Bool)? {
         guard body.count >= 2 else { return nil }
         let topicLength = Int(body[0]) << 8 | Int(body[1])
         guard body.count >= 2 + topicLength else { return nil }
@@ -122,7 +188,7 @@ final class MQTTClient {
         if qos == 1, let packet {
             send(bytes: [0x40, 0x02, UInt8(packet >> 8), UInt8(packet & 0xFF)])
         }
-        return (topic, payload)
+        return (topic, payload, type & 0x01 != 0)
     }
 
     private func receivePacket(_ completion: @escaping (UInt8, [UInt8]) -> Void) {
@@ -161,6 +227,7 @@ final class MQTTClient {
         }
         connection?.receive(minimumIncompleteLength: count, maximumLength: count) { data, _, complete, error in
             if complete || error != nil {
+                self.stopKeepAlive()
                 self.onState?(false)
                 return
             }
@@ -168,8 +235,33 @@ final class MQTTClient {
         }
     }
 
+    private func publish(topic: String, payload: String, retain: Bool) {
+        queue.async { [weak self] in
+            guard let self else { return }
+            let typeAndFlags: UInt8 = retain ? 0x31 : 0x30
+            self.sendPacket(typeAndFlags: typeAndFlags, body: self.packString(topic) + Array(payload.utf8))
+        }
+    }
+
     private func sendPacket(typeAndFlags: UInt8, body: [UInt8]) {
         send(bytes: [typeAndFlags] + encodeRemainingLength(body.count) + body)
+    }
+
+    private func startKeepAlive() {
+        stopKeepAlive()
+        let timer = DispatchSource.makeTimerSource(queue: queue)
+        let interval = DispatchTimeInterval.seconds(Int(keepAliveSeconds / 2))
+        timer.schedule(deadline: .now() + interval, repeating: interval)
+        timer.setEventHandler { [weak self] in
+            self?.send(bytes: [0xC0, 0x00])
+        }
+        keepAliveTimer = timer
+        timer.resume()
+    }
+
+    private func stopKeepAlive() {
+        keepAliveTimer?.cancel()
+        keepAliveTimer = nil
     }
 
     private func send(bytes: [UInt8]) {

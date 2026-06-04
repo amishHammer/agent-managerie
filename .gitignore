@@ -8,7 +8,7 @@ DerivedData/
 *.xcuserdata/
 mosquitto.db
 *.sqlite3
-
+macos/Menagerie/.swiftpm
 # Local Codex config/state can contain host paths, broker endpoints, and secrets.
 .codex/
 .agents/
