@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import Foundation
 import SwiftUI
 
 struct GremlinOverlayView: View {
@@ -72,10 +73,12 @@ struct ThoughtBubbleView: View {
                 .offset(x: 18, y: 10)
             VStack(alignment: .leading, spacing: 8) {
                 if items.isEmpty {
-                    Text(fallback)
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(Color.black.opacity(0.86))
-                        .lineLimit(4)
+                    MarkdownBubbleText(
+                        text: fallback,
+                        font: .caption.weight(.medium),
+                        color: Color.black.opacity(0.86),
+                        lineLimit: 4
+                    )
                 } else {
                     ForEach(Array(items.enumerated()), id: \.offset) { _, item in
                         ThoughtBubbleRow(item: item)
@@ -108,12 +111,36 @@ struct ThoughtBubbleRow: View {
                     .foregroundStyle(Color.black.opacity(0.9))
                     .lineLimit(1)
             }
-            Text(item.body)
-                .font(.caption2)
-                .foregroundStyle(item.isRedacted ? Color.black.opacity(0.5) : Color.black.opacity(0.72))
-                .italic(item.isRedacted)
-                .lineLimit(2)
+            MarkdownBubbleText(
+                text: item.body,
+                font: .caption2,
+                color: item.isRedacted ? Color.black.opacity(0.5) : Color.black.opacity(0.72),
+                lineLimit: 2,
+                italic: item.isRedacted
+            )
         }
+    }
+}
+
+struct MarkdownBubbleText: View {
+    let text: String
+    let font: Font
+    let color: Color
+    let lineLimit: Int
+    var italic = false
+
+    var body: some View {
+        Text(attributedText)
+            .font(font)
+            .foregroundStyle(color)
+            .italic(italic)
+            .lineLimit(lineLimit)
+    }
+
+    private var attributedText: AttributedString {
+        var options = AttributedString.MarkdownParsingOptions()
+        options.interpretedSyntax = .inlineOnlyPreservingWhitespace
+        return (try? AttributedString(markdown: text, options: options)) ?? AttributedString(text)
     }
 }
 

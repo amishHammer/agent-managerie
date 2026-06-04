@@ -1,0 +1,83 @@
+name: Menagerie macOS
+
+on:
+  push:
+    branches:
+      - "**"
+    tags:
+      - "v*"
+  pull_request:
+  release:
+    types:
+      - published
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Build release binary
+        run: swift build --package-path macos/Menagerie -c release
+
+      - name: Resolve artifact name
+        id: artifact
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            suffix="${GITHUB_REF_NAME//\//-}"
+          else
+            suffix="${GITHUB_SHA:0:12}"
+          fi
+          echo "filename=Menagerie-macos-${suffix}.zip" >> "$GITHUB_OUTPUT"
+
+      - name: Package app bundle
+        shell: bash
+        run: |
+          app="dist/Menagerie.app"
+          mkdir -p "$app/Contents/MacOS"
+          cp macos/Menagerie/.build/release/Menagerie "$app/Contents/MacOS/Menagerie"
+          chmod +x "$app/Contents/MacOS/Menagerie"
+          cat > "$app/Contents/Info.plist" <<'PLIST'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>CFBundleExecutable</key>
+            <string>Menagerie</string>
+            <key>CFBundleIdentifier</key>
+            <string>dev.menagerie.macos</string>
+            <key>CFBundleName</key>
+            <string>Menagerie</string>
+            <key>CFBundlePackageType</key>
+            <string>APPL</string>
+            <key>CFBundleShortVersionString</key>
+            <string>0.0.0</string>
+            <key>CFBundleVersion</key>
+            <string>0</string>
+            <key>LSMinimumSystemVersion</key>
+            <string>14.0</string>
+            <key>NSHighResolutionCapable</key>
+            <true/>
+          </dict>
+          </plist>
+          PLIST
+          ditto -c -k --keepParent "$app" "dist/${{ steps.artifact.outputs.filename }}"
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Menagerie-macos
+          path: dist/${{ steps.artifact.outputs.filename }}
+          if-no-files-found: error
+
+      - name: Upload release asset
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/${{ steps.artifact.outputs.filename }}
