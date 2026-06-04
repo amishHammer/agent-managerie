@@ -12,11 +12,18 @@ MQTT_APP_PASSWORD="${MQTT_APP_PASSWORD:-${MQTT_PET_PASSWORD:-dev-menagerie-passw
 
 mkdir -p /mosquitto/config /mosquitto/data /mosquitto/log
 
-mosquitto_passwd -b -c /mosquitto/config/passwords "${MQTT_HOOK_USERNAME}" "${MQTT_HOOK_PASSWORD}"
-mosquitto_passwd -b /mosquitto/config/passwords "${MQTT_APP_USERNAME}" "${MQTT_APP_PASSWORD}"
-mosquitto_passwd -b /mosquitto/config/passwords "${MQTT_COLLECTOR_USERNAME}" "${MQTT_COLLECTOR_PASSWORD}"
+PASSWORD_FILE=/mosquitto/config/passwords
+ACL_FILE=/mosquitto/config/acl
 
-cat > /mosquitto/config/acl <<EOF
+# These files are generated from environment on every container start. Remove
+# stale copies so restarts do not fail when mosquitto_passwd creates the file.
+rm -f "${PASSWORD_FILE}" "${ACL_FILE}"
+
+mosquitto_passwd -b -c "${PASSWORD_FILE}" "${MQTT_HOOK_USERNAME}" "${MQTT_HOOK_PASSWORD}"
+mosquitto_passwd -b "${PASSWORD_FILE}" "${MQTT_APP_USERNAME}" "${MQTT_APP_PASSWORD}"
+mosquitto_passwd -b "${PASSWORD_FILE}" "${MQTT_COLLECTOR_USERNAME}" "${MQTT_COLLECTOR_PASSWORD}"
+
+cat > "${ACL_FILE}" <<EOF
 user ${MQTT_HOOK_USERNAME}
 topic write ${MQTT_TOPIC_ROOT}/events/#
 topic write ${MQTT_TOPIC_ROOT}/state/#
@@ -33,8 +40,8 @@ topic read ${MQTT_TOPIC_ROOT}/state/#
 topic read ${MQTT_TOPIC_ROOT}/health/#
 EOF
 
-chmod 0640 /mosquitto/config/passwords /mosquitto/config/acl
-chown mosquitto:mosquitto /mosquitto/config/passwords /mosquitto/config/acl
+chmod 0640 "${PASSWORD_FILE}" "${ACL_FILE}"
+chown mosquitto:mosquitto "${PASSWORD_FILE}" "${ACL_FILE}"
 chown -R mosquitto:mosquitto /mosquitto/data /mosquitto/log
 
 exec "$@"
