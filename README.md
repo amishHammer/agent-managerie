@@ -2,8 +2,13 @@
 
 # Menagerie
 
-Menagerie is a Codex activity companion prototype. Each Codex session is tracked internally as a session and shown in the desktop app as a little gremlin.
+Menagerie is for anyone whose ADHD brain has ever launched a remote AI agent, blinked, opened twelve tabs, answered three messages, and completely lost object permanence for the poor thing.
 
+It gives each remote agent a local status monitor called a gremlin: a small, opinionated presence that sits nearby and reminds you what your far-flung workers are doing, whether they are thinking, stuck, done, or dramatically starving for attention. Keep them fed with fresh input quickly enough and they’ll keep watch over your overworked army of invisible assistants. Neglect them, and the little gremlins die, leaving only silence, shame, and a terminal tab you swear you were definitely going to check.
+
+The result is less “Where did I put that agent?” and more “Ah yes, the clan is alive, caffeinated, and only mildly feral.”
+
+Menagerie architecturally consists of:
 - Remote MQTT broker and collector service via `docker compose up`.
 - Codex hook publisher plugin for lifecycle events.
 - `codex exec --json` adapter for non-interactive runs.
